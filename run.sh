@@ -19,8 +19,8 @@ $MAKE -s cuda || exit
 echo "run ops-selftest-cuda"
 ./ops-selftest-cuda || exit
 if [ ! -r "$MODEL" ]; then
-    echo "no model file at $MODEL: mini-ollama-cuda is not run (MODEL=path/to/q4_0.gguf sh run.sh)" >&2
-    exit 0
+  echo "no model file at $MODEL: mini-ollama-cuda is not run (MODEL=path/to/q4_0.gguf sh run.sh)" >&2
+  exit 0
 fi
 echo "run mini-ollama-cuda"
 ./mini-ollama-cuda "$MODEL" prompt.txt

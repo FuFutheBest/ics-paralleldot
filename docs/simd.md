@@ -16,37 +16,37 @@ static void matvec_q4_0(float *y, const uint8_t *w, const float *x, size_t rows,
 
 [ops.h](../ops.h) 是框架与算子之间的接口：`struct ops` 中每个函数指针是一个算子或一项内存操作，注释写明它做什么；Q4_0 块的排布与读出缩放系数的函数 `q4_0_scale` 也在其中。框架只通过这张表调用算子，你不修改这个文件。完成这一步你需要阅读 `ops.h`、`ops/simd.c` 与本说明，不需要阅读顶层的其他源文件。
 
-| 算子 | 计算 | 在 `simd.c` 中 |
-| --- | --- | --- |
-| `matvec` | Q4_0 矩阵与向量的乘积 | **`matvec_q4_0`，你来实现** |
-| `embed` | 把一行 Q4_0 权重还原为 float | 已给出，每步还原一个块的 32 个权重 |
-| `rmsnorm` | 若干个向量各自缩放到均方根为 1，再乘以增益 | 已给出 |
-| `rope` | 按位置旋转每个向量的各对分量 | 已给出 |
-| `attn_scores` | 每个查询头与之前每个 Token 的键的内积 | 已给出 |
-| `softmax` | 每一行分数变为和为 1 的权重 | 已给出，`exp8` 每次计算 8 个指数 |
-| `attn_values` | 按权重累加之前每个 Token 的值 | 已给出 |
-| `swiglu` | 前馈网络的门控 `silu(gate) · up` | 已给出 |
-| `add` | 残差相加 | 已给出 |
-| `argmax` | 最大的分数所在的位置，即下一个 Token | 已给出 |
+| 算子          | 计算                                       | 在 `simd.c` 中                     |
+| ------------- | ------------------------------------------ | ---------------------------------- |
+| `matvec`      | Q4_0 矩阵与向量的乘积                      | **`matvec_q4_0`，你来实现**        |
+| `embed`       | 把一行 Q4_0 权重还原为 float               | 已给出，每步还原一个块的 32 个权重 |
+| `rmsnorm`     | 若干个向量各自缩放到均方根为 1，再乘以增益 | 已给出                             |
+| `rope`        | 按位置旋转每个向量的各对分量               | 已给出                             |
+| `attn_scores` | 每个查询头与之前每个 Token 的键的内积      | 已给出                             |
+| `softmax`     | 每一行分数变为和为 1 的权重                | 已给出，`exp8` 每次计算 8 个指数   |
+| `attn_values` | 按权重累加之前每个 Token 的值              | 已给出                             |
+| `swiglu`      | 前馈网络的门控 `silu(gate) · up`           | 已给出                             |
+| `add`         | 残差相加                                   | 已给出                             |
+| `argmax`      | 最大的分数所在的位置，即下一个 Token       | 已给出                             |
 
 `simd.c` 的末尾还有算子表的五项内存操作（`init`、`alloc`、`upload`、`download`、`finish`），与 `scalar.c` 中的相同：两套 CPU 算子都直接使用程序的内存。
 
 已给出的算子你可以当作例子阅读：`embed` 中还原一个块的写法，`dot`（`rmsnorm` 与 `attn_scores` 调用的 float 内积）中 8 路累加、最后用 `hsum8` 水平相加的写法，都是 `matvec_q4_0` 要用到的。
 
-| 程序 | 作用 |
-| --- | --- |
-| `ops-selftest-simd` | 不需要模型文件。检查 `simd.c` 中每个算子的结果，然后比较 `matvec` 与标量版本的速度 |
-| `mini-ollama-simd` | 读取模型文件，用 `simd.c` 中的算子回答 `prompt.txt` 中的问题，输出生成速度 |
-| `mini-ollama-scalar` | 同上，用 `scalar.c` 中的算子 |
+| 程序                 | 作用                                                                               |
+| -------------------- | ---------------------------------------------------------------------------------- |
+| `ops-selftest-simd`  | 不需要模型文件。检查 `simd.c` 中每个算子的结果，然后比较 `matvec` 与标量版本的速度 |
+| `mini-ollama-simd`   | 读取模型文件，用 `simd.c` 中的算子回答 `prompt.txt` 中的问题，输出生成速度         |
+| `mini-ollama-scalar` | 同上，用 `scalar.c` 中的算子                                                       |
 
 本文中的命令你都在 `parallel-dot/` 目录下执行。
 
 ## 准备
 
-| 软件 | 用途 |
-| --- | --- |
-| gcc | 编译三个程序。`make CC=clang` 改用 clang |
-| GNU make | 编译 |
+| 软件                       | 用途                                                                                                        |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| gcc                        | 编译三个程序。`make CC=clang` 改用 clang                                                                    |
+| GNU make                   | 编译                                                                                                        |
 | 支持 AVX2 的 x86-64 处理器 | 运行 `simd.c` 中的算子。2013 年以后的 Intel 处理器（Haswell 起）与 2017 年以后的 AMD 处理器（Zen 起）都支持 |
 
 你的处理器不支持 AVX2 时，程序在第一次执行向量指令处以「非法指令」（Illegal instruction）终止。Linux 上 `grep -o avx2 /proc/cpuinfo | head -1` 输出 `avx2` 即为支持。
@@ -57,11 +57,11 @@ static void matvec_q4_0(float *y, const uint8_t *w, const float *x, size_t rows,
 
 Windows 上的命令你都在 Git Bash 中执行。你需要安装下面三个软件，每个软件安装之后，把表中所列的目录加入环境变量 `Path`：
 
-| 软件 | 下载地址 | 加入 `Path` 的目录 |
-| --- | --- | --- |
-| Git for Windows | <https://git-scm.com/downloads/win> | 不需要 |
-| GNU make（GnuWin32） | <https://gnuwin32.sourceforge.net/packages/make.htm> | `C:\Program Files (x86)\GnuWin32\bin` |
-| gcc（WinLibs 的 MinGW-w64 GCC） | <https://winlibs.com/> | 解压目录下的 `mingw64\bin` |
+| 软件                            | 下载地址                                             | 加入 `Path` 的目录                    |
+| ------------------------------- | ---------------------------------------------------- | ------------------------------------- |
+| Git for Windows                 | <https://git-scm.com/downloads/win>                  | 不需要                                |
+| GNU make（GnuWin32）            | <https://gnuwin32.sourceforge.net/packages/make.htm> | `C:\Program Files (x86)\GnuWin32\bin` |
+| gcc（WinLibs 的 MinGW-w64 GCC） | <https://winlibs.com/>                               | 解压目录下的 `mingw64\bin`            |
 
 - **Git for Windows** 提供 Git Bash，在其中运行的 `make` 用它的 `sh` 执行 `Makefile` 中的命令。
 - **GNU make**：GnuWin32 提供的版本是 3.81，页面上 “Complete package, except sources” 一行的 Setup 是安装程序。
@@ -75,13 +75,13 @@ Windows 上你也可以在 WSL2（Ubuntu）中按 Linux 的方式完成这一步
 
 `simd.c` 末尾的算子表把 `matvec_q4_0` 填在 `matvec` 一项，`main.c` 经由这一项调用它，每次计算一个矩阵与一个向量的乘积。`main.c` 生成一个 Token 时依次经过模型的 28 层，每层调用 7 次，最后在输出层调用 1 次，共 197 次：
 
-| 位置 | 矩阵 | `rows` × `cols` |
-| --- | --- | --- |
-| 每层的注意力部分 | `attn_q`、`attn_output` | 2048 × 2048 |
-| | `attn_k`、`attn_v` | 1024 × 2048 |
-| 每层的前馈部分 | `ffn_gate`、`ffn_up` | 6144 × 2048 |
-| | `ffn_down` | 2048 × 6144 |
-| 输出层（与词嵌入共用一个矩阵） | `token_embd` | 151936 × 2048 |
+| 位置                           | 矩阵                    | `rows` × `cols` |
+| ------------------------------ | ----------------------- | --------------- |
+| 每层的注意力部分               | `attn_q`、`attn_output` | 2048 × 2048     |
+|                                | `attn_k`、`attn_v`      | 1024 × 2048     |
+| 每层的前馈部分                 | `ffn_gate`、`ffn_up`    | 6144 × 2048     |
+|                                | `ffn_down`              | 2048 × 6144     |
+| 输出层（与词嵌入共用一个矩阵） | `token_embd`            | 151936 × 2048   |
 
 因此在 `mini-ollama-simd` 中你的函数收到的 `cols` 只有 2048 与 6144 两种，`x` 是这一层的输入向量；`ops-selftest-simd` 还用 32 与 96 检查块的边界。生成一个 Token 要计算 28 × 20480 + 151936 = 725376 行的内积，全部矩阵的每个权重都参与一次乘加（约 1.7 × 10⁹ 个）。其他算子每次只处理几千个数，所以生成速度主要由这个函数决定。
 
@@ -89,9 +89,9 @@ Windows 上你也可以在 WSL2（Ubuntu）中按 Linux 的方式完成这一步
 
 一个 Q4_0 块存 32 个权重，占 18 个字节；一行 `n` 个权重是 `n / 32` 个块首尾相接，`n` 是 32 的倍数。第二讲实验 `nano-quant` 写出的就是这种块。
 
-| 字节 | 内容 |
-| --- | --- |
-| 0..1 | 缩放系数 `d`，半精度浮点数（1 位符号、5 位指数、10 位尾数），低字节在前 |
+| 字节             | 内容                                                                      |
+| ---------------- | ------------------------------------------------------------------------- |
+| 0..1             | 缩放系数 `d`，半精度浮点数（1 位符号、5 位指数、10 位尾数），低字节在前   |
 | 2 + j，j = 0..15 | 位 3..0 是第 `j` 个权重的编码 `q`，位 7..4 是第 `j + 16` 个权重的编码 `q` |
 
 编码 `q` 取 0..15，表示的权重是 `d · (q − 8)`。`q4_0_scale(blk)` 读出块 `blk` 的 `d`，返回 float，由框架在 `ops.h` 中给出。
@@ -165,11 +165,11 @@ make clean        # 删除全部程序与 build/ 下的目标文件
 
 `make` 把每套算子的目标文件放在 `build/` 下各自的子目录中：`build/scalar/` 是 `mini-ollama-scalar` 的，`build/simd/` 是 `mini-ollama-simd` 与 `ops-selftest-simd` 的。`main.c` 与 `selftest.c` 以 `-DOPS=ops_simd` 等编译，这个宏指明程序使用哪一张算子表。你不改 `Makefile` 中的编译选项：
 
-| 文件 | 选项 | 作用 |
-| --- | --- | --- |
-| `ops/simd.c` | `-O2 -mavx2` | 允许使用 AVX2 指令。不加 `-mfma`：讲义讲到 AVX2 为止，融合乘加在这些算子中的收益很小 |
-| `ops/scalar.c` | `-O2 -fno-tree-vectorize` | GCC 12 起在 `-O2` 下自动向量化部分循环，这个选项使标量算子保持每次处理一个元素 |
-| 其余文件 | `-O2` | |
+| 文件           | 选项                      | 作用                                                                                 |
+| -------------- | ------------------------- | ------------------------------------------------------------------------------------ |
+| `ops/simd.c`   | `-O2 -mavx2`              | 允许使用 AVX2 指令。不加 `-mfma`：讲义讲到 AVX2 为止，融合乘加在这些算子中的收益很小 |
+| `ops/scalar.c` | `-O2 -fno-tree-vectorize` | GCC 12 起在 `-O2` 下自动向量化部分循环，这个选项使标量算子保持每次处理一个元素       |
+| 其余文件       | `-O2`                     |                                                                                      |
 
 `ops-selftest-simd` 分三组，每一项输出一行 `pass` 或 `FAIL`，最后输出 `all passed` 或 `N failed`，退出码为失败的项数。第一组不调用 `matvec`；你还没有实现 `matvec_q4_0` 时，程序在第二组第一次调用它时输出 `matvec_q4_0 is not implemented yet` 并以状态 3 退出。
 

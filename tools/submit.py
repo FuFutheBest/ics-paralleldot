@@ -21,6 +21,7 @@ was killed (time or output limit), 3 when the server refused the
 submission or could not be reached.
 
 Only the Python standard library is used."""
+
 import io
 import os
 import sys
@@ -44,7 +45,9 @@ def collect(paths):
         elif os.path.isfile(p):
             name = os.path.basename(p)
             if name not in ALLOWED:
-                sys.exit("submit.py: %s: only %s can be submitted" % (p, ", ".join(ALLOWED)))
+                sys.exit(
+                    "submit.py: %s: only %s can be submitted" % (p, ", ".join(ALLOWED))
+                )
             files[name] = p
         else:
             sys.exit("submit.py: %s: no such file or directory" % p)
@@ -93,11 +96,17 @@ def main(argv):
                 if line.startswith("# done "):
                     for item in line.split():
                         if item.startswith("status="):
-                            status = {"ok": 0, "error": 1, "timeout": 2,
-                                      "output-limit": 2}.get(item[7:], 1)
+                            status = {
+                                "ok": 0,
+                                "error": 1,
+                                "timeout": 2,
+                                "output-limit": 2,
+                            }.get(item[7:], 1)
     except urllib.error.HTTPError as e:
-        sys.stderr.write("submit.py: server refused the submission: %d %s\n%s"
-                         % (e.code, e.reason, e.read().decode("utf-8", "replace")))
+        sys.stderr.write(
+            "submit.py: server refused the submission: %d %s\n%s"
+            % (e.code, e.reason, e.read().decode("utf-8", "replace"))
+        )
         return 3
     except urllib.error.URLError as e:
         sys.stderr.write("submit.py: cannot reach %s: %s\n" % (server, e.reason))

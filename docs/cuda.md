@@ -10,26 +10,26 @@
 
 [ops.h](../ops.h) 是框架与算子之间的接口：`struct ops` 中每个函数指针是一个算子或一项显存操作，注释写明它做什么；Q4_0 块的排布与读出缩放系数的函数 `q4_0_scale` 也在其中，`q4_0_scale` 在 CPU 与 GPU 上都可以调用。框架只通过这张表调用算子，你不修改这个文件。完成这一步你需要阅读 `ops.h`、`ops/cuda.cu` 与本说明，不需要阅读顶层的其他源文件。
 
-| 算子 | 计算 | kernel 与启动配置 | 在 `cuda.cu` 中 |
-| --- | --- | --- | --- |
-| `matvec` | 矩阵向量乘 $y = Wx$，$W$ 为 Q4_0 | `matvec_q4_0` 启动 `matvec_q4_0_kernel<<<rows, 256>>>`：一个块算一行 | **kernel 你来实现** |
-| `rmsnorm` | 若干个向量各自缩放到均方根为 1，再乘以增益 | `rmsnorm_kernel<<<n_vec, 256>>>`：一个块处理一个向量，折半求平方和 | 已给出 |
-| `embed` | 把一行 Q4_0 权重还原为 float | `embed_kernel<<<n / 32, 32>>>`：一个线程还原一个权重 | 已给出 |
-| `rope` | 按位置旋转每个向量的各对分量 | `rope_kernel<<<n_vec, d / 2>>>`：一个线程旋转一对分量 | 已给出 |
-| `attn_scores` | 每个查询头与之前每个 Token 的键的内积 | `attn_scores_kernel`：一个线程算一个分数，查询先拷入共享内存 | 已给出 |
-| `softmax` | 每一行分数变为和为 1 的权重 | `softmax_kernel<<<n_row, 256>>>`：一个块处理一行，两次折半求最大值与和 | 已给出 |
-| `attn_values` | 按权重累加之前每个 Token 的值 | `attn_values_kernel<<<n_head, d>>>`：一个线程算一个输出元素 | 已给出 |
-| `swiglu` | 前馈网络的门控 `silu(gate) · up` | `swiglu_kernel`：一个线程处理一个元素 | 已给出 |
-| `add` | 残差相加 | `add_kernel`：一个线程处理一个元素 | 已给出 |
-| `argmax` | 最大的分数所在的位置，即下一个 Token | `argmax_kernel<<<1, 1024>>>`：一个块折半求最大值与它的位置 | 已给出 |
+| 算子          | 计算                                       | kernel 与启动配置                                                      | 在 `cuda.cu` 中     |
+| ------------- | ------------------------------------------ | ---------------------------------------------------------------------- | ------------------- |
+| `matvec`      | 矩阵向量乘 $y = Wx$，$W$ 为 Q4_0           | `matvec_q4_0` 启动 `matvec_q4_0_kernel<<<rows, 256>>>`：一个块算一行   | **kernel 你来实现** |
+| `rmsnorm`     | 若干个向量各自缩放到均方根为 1，再乘以增益 | `rmsnorm_kernel<<<n_vec, 256>>>`：一个块处理一个向量，折半求平方和     | 已给出              |
+| `embed`       | 把一行 Q4_0 权重还原为 float               | `embed_kernel<<<n / 32, 32>>>`：一个线程还原一个权重                   | 已给出              |
+| `rope`        | 按位置旋转每个向量的各对分量               | `rope_kernel<<<n_vec, d / 2>>>`：一个线程旋转一对分量                  | 已给出              |
+| `attn_scores` | 每个查询头与之前每个 Token 的键的内积      | `attn_scores_kernel`：一个线程算一个分数，查询先拷入共享内存           | 已给出              |
+| `softmax`     | 每一行分数变为和为 1 的权重                | `softmax_kernel<<<n_row, 256>>>`：一个块处理一行，两次折半求最大值与和 | 已给出              |
+| `attn_values` | 按权重累加之前每个 Token 的值              | `attn_values_kernel<<<n_head, d>>>`：一个线程算一个输出元素            | 已给出              |
+| `swiglu`      | 前馈网络的门控 `silu(gate) · up`           | `swiglu_kernel`：一个线程处理一个元素                                  | 已给出              |
+| `add`         | 残差相加                                   | `add_kernel`：一个线程处理一个元素                                     | 已给出              |
+| `argmax`      | 最大的分数所在的位置，即下一个 Token       | `argmax_kernel<<<1, 1024>>>`：一个块折半求最大值与它的位置             | 已给出              |
 
 已给出的 kernel 你可以当作例子阅读：`rmsnorm_kernel` 中每个线程先累加每第 256 个元素的平方、再在共享内存中折半求和的写法，正是你的 kernel 要用的，`softmax_kernel` 用同样的写法折半两次；`embed_kernel` 中从块中取出一个编码的写法，`matvec_q4_0_kernel` 也要用到。
 
-| 程序 | 作用 |
-| --- | --- |
-| `ops-selftest-cuda` | 不需要模型文件。检查 `cuda.cu` 中每个算子的结果，然后比较 `matvec` 在 GPU 与 CPU 上的速度 |
-| `mini-ollama-cuda` | 读取模型文件，用 `cuda.cu` 中的算子回答 `prompt.txt` 中的问题，输出生成速度 |
-| `mini-ollama-scalar` | 同上，用 `scalar.c` 中的算子，在 CPU 的一个线程上运行；第一步也用它 |
+| 程序                 | 作用                                                                                      |
+| -------------------- | ----------------------------------------------------------------------------------------- |
+| `ops-selftest-cuda`  | 不需要模型文件。检查 `cuda.cu` 中每个算子的结果，然后比较 `matvec` 在 GPU 与 CPU 上的速度 |
+| `mini-ollama-cuda`   | 读取模型文件，用 `cuda.cu` 中的算子回答 `prompt.txt` 中的问题，输出生成速度               |
+| `mini-ollama-scalar` | 同上，用 `scalar.c` 中的算子，在 CPU 的一个线程上运行；第一步也用它                       |
 
 本文中的命令你都在 `parallel-dot/` 目录下执行。
 
@@ -57,10 +57,10 @@ __global__ void matvec_q4_0_kernel(float *y, const uint8_t *w, const float *x, i
 
 ## 两种运行方式
 
-| 机器 | 做法 |
-| --- | --- |
-| 有 NVIDIA 显卡与 CUDA Toolkit | `make test-cuda`、`make run-cuda`：在本机编译与运行 |
-| 没有 NVIDIA 显卡 | `make remote`：把 `ops/cuda.cu` 发送到课程服务器，服务器编译、运行 `ops-selftest-cuda` 与 `mini-ollama-cuda`，返回两者的输出；本机只需要 Python 3 |
+| 机器                          | 做法                                                                                                                                              |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 有 NVIDIA 显卡与 CUDA Toolkit | `make test-cuda`、`make run-cuda`：在本机编译与运行                                                                                               |
+| 没有 NVIDIA 显卡              | `make remote`：把 `ops/cuda.cu` 发送到课程服务器，服务器编译、运行 `ops-selftest-cuda` 与 `mini-ollama-cuda`，返回两者的输出；本机只需要 Python 3 |
 
 课程服务器暂时没有启动，`make remote` 与本文中向课程服务器提交的命令（`tools/submit.py`、curl、`/submit` 页面）现在都不能使用。你没有 NVIDIA 显卡、确实需要运行这一步时，联系助教协商。
 
@@ -103,12 +103,12 @@ python3 tools/submit.py
 
 ## 编译与检查
 
-| 文件 | 编译器与选项 | 作用 |
-| --- | --- | --- |
-| `ops/cuda.cu` | `nvcc -O2 -arch=native` | 为本机显卡生成代码；`make cuda ARCH=sm_86` 指定架构 |
+| 文件           | 编译器与选项                  | 作用                                                                           |
+| -------------- | ----------------------------- | ------------------------------------------------------------------------------ |
+| `ops/cuda.cu`  | `nvcc -O2 -arch=native`       | 为本机显卡生成代码；`make cuda ARCH=sm_86` 指定架构                            |
 | `ops/scalar.c` | `gcc -O2 -fno-tree-vectorize` | GCC 12 起在 `-O2` 下自动向量化部分循环，这个选项使标量算子保持每次处理一个元素 |
-| 其余 `.c` 文件 | `gcc -O2` | `main.c` 与 `selftest.c` 另加 `-DOPS=ops_cuda`，指明程序使用的算子表 |
-| 链接 | `nvcc` | 链接 CUDA 运行时库 |
+| 其余 `.c` 文件 | `gcc -O2`                     | `main.c` 与 `selftest.c` 另加 `-DOPS=ops_cuda`，指明程序使用的算子表           |
+| 链接           | `nvcc`                        | 链接 CUDA 运行时库                                                             |
 
 目标文件放在 `build/cuda/` 下。
 
@@ -233,12 +233,12 @@ weight bandwidth:     42.3 GB/s
 
 ### 退出码
 
-| 退出码 | 含义 |
-| --- | --- |
-| 0 | 服务器报告 `status=ok`：`ops-selftest-cuda` 全部通过，`mini-ollama-cuda` 正常结束 |
-| 1 | 作业中有程序以非零状态退出：编译错误、某个 kernel 尚未实现（`... is not implemented yet`），或 `ops-selftest-cuda` 有 `FAIL` |
-| 2 | 作业被服务器终止：超过时间限制（`status=timeout`）或输出超过限制（`status=output-limit`） |
-| 3 | 服务器拒绝了提交（文件不合规、过大、提交过于频繁、队列已满、口令错误），或无法连接服务器。原因打印在标准错误 |
+| 退出码 | 含义                                                                                                                         |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| 0      | 服务器报告 `status=ok`：`ops-selftest-cuda` 全部通过，`mini-ollama-cuda` 正常结束                                            |
+| 1      | 作业中有程序以非零状态退出：编译错误、某个 kernel 尚未实现（`... is not implemented yet`），或 `ops-selftest-cuda` 有 `FAIL` |
+| 2      | 作业被服务器终止：超过时间限制（`status=timeout`）或输出超过限制（`status=output-limit`）                                    |
+| 3      | 服务器拒绝了提交（文件不合规、过大、提交过于频繁、队列已满、口令错误），或无法连接服务器。原因打印在标准错误                 |
 
 ### 服务器的限制
 
